@@ -16,6 +16,52 @@ const heartbeatIntervalMs = Number(
   process.env.WS_HEARTBEAT_INTERVAL_MS ?? 30000,
 );
 
+const parseAllowedHosts = (value) => {
+  const hosts = value
+    ?.split(",")
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (!hosts?.length) {
+    return undefined;
+  }
+
+  if (hosts.some((host) => host === "*" || host === "true")) {
+    return true;
+  }
+
+  return hosts;
+};
+
+const stripPort = (host) => {
+  if (host.startsWith("[")) {
+    const ipv6End = host.indexOf("]");
+    return ipv6End === -1 ? host : host.slice(1, ipv6End);
+  }
+
+  return host.split(":")[0] ?? host;
+};
+
+const isHostAllowed = (requestHost, allowedHosts) => {
+  const normalizedHost = requestHost.trim().toLowerCase();
+  const hostname = stripPort(normalizedHost);
+
+  return allowedHosts.some((allowedHost) => {
+    if (allowedHost === normalizedHost || allowedHost === hostname) {
+      return true;
+    }
+
+    if (allowedHost.startsWith(".")) {
+      const suffix = allowedHost.slice(1);
+      return hostname === suffix || hostname.endsWith(allowedHost);
+    }
+
+    return false;
+  });
+};
+
+const allowedHosts = parseAllowedHosts(process.env.WEBSOCKET_ALLOWED_HOSTS);
+
 const clientsByUserId = new Map();
 const subscriber = new Redis(redisUrl);
 const server = http.createServer((request, response) => {
@@ -95,6 +141,14 @@ const rejectUpgrade = (socket, statusCode, message) => {
 };
 
 server.on("upgrade", (request, socket, head) => {
+  if (
+    Array.isArray(allowedHosts) &&
+    (!request.headers.host || !isHostAllowed(request.headers.host, allowedHosts))
+  ) {
+    rejectUpgrade(socket, 403, "Forbidden");
+    return;
+  }
+
   const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
   if (url.pathname !== "/" && url.pathname !== "/ws") {
     rejectUpgrade(socket, 404, "Not Found");

@@ -21,5 +21,6 @@ Environment variables:
 - `PORT` default `3001`
 - `REDIS_URL` default `redis://localhost:6379`
 - `BACKEND_URL` default `http://localhost:3000`
+- `WEBSOCKET_ALLOWED_HOSTS` optional comma-separated HTTP `Host` allowlist; `*` allows every host
 - `REDIS_CHANNEL_PATTERN` default `notifications:user:*`
 - `REDIS_USER_CHANNEL_PREFIX` default `notifications:user:`
